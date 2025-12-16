@@ -1,0 +1,21 @@
+# FastAPI and server dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Data handling
+msgpack==1.1.2
+
+# Curvature library dependencies
+osmium==4.2.0
+
+# Optional: Claude AI integration (for future LLM features)
+# anthropic==0.7.0
+
+# Note: The curvature library itself should be installed separately:
+# git clone https://github.com/adamfranco/curvature.git
+# cd curvature
+# pip install -e .
+#
+# Or add to PYTHONPATH:
+# export PYTHONPATH="/path/to/curvature:$PYTHONPATH"
