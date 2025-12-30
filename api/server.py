@@ -37,11 +37,16 @@ except ImportError:
     GOOGLE_MAPS_API_KEY = None
     print("Warning: api/config.py not found. Please copy config.example.py to config.py and add your API keys.")
 
+# Import new route modules for authentication, routes, and favorites
+from api.auth_routes import router as auth_router
+from api.route_routes import router as routes_router
+from api.favorites_routes import router as favorites_router
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Curvature API",
-    description="API for finding and exploring curvy roads",
-    version="1.0.0"
+    description="API for finding and exploring curvy roads with user authentication, route planning, and favorites",
+    version="2.0.0"
 )
 
 # Enable CORS so web browsers can access the API
@@ -53,6 +58,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers for new features
+app.include_router(auth_router)
+app.include_router(routes_router)
+app.include_router(favorites_router)
 
 # Initialize output tools (provides utility methods for working with collections)
 tools = OutputTools('km')
