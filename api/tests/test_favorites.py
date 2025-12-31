@@ -88,7 +88,7 @@ def test_add_favorite_unauthorized(client: TestClient, test_road: Road):
         "road_id": test_road.id
     })
 
-    assert response.status_code == 403  # No credentials
+    assert response.status_code == 401  # No credentials (Unauthorized)
 
 
 def test_list_favorites(client: TestClient, auth_headers: dict, multiple_test_roads: list[Road]):

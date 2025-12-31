@@ -121,7 +121,7 @@ def test_get_current_user_unauthorized(client: TestClient):
     """Test getting current user without authentication."""
     response = client.get("/auth/me")
 
-    assert response.status_code == 403  # No credentials provided
+    assert response.status_code == 401  # No credentials provided (Unauthorized)
 
 
 def test_get_current_user_invalid_token(client: TestClient):

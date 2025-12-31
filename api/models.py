@@ -81,7 +81,7 @@ class Road(Base):
     length_meters: Mapped[float] = mapped_column(Float, nullable=False)
     surface: Mapped[Optional[str]] = mapped_column(String(50), index=True)  # paved, unpaved, unknown
     join_type: Mapped[Optional[str]] = mapped_column(String(50))
-    geometry = Column(Geography(geometry_type='LINESTRING', srid=4326))  # PostGIS geography column
+    geometry = Column(Geography(geometry_type='LINESTRING', srid=4326, spatial_index=False))  # PostGIS geography column, index defined in __table_args__
     properties: Mapped[Optional[dict]] = mapped_column(JSONB)  # flexible storage for additional metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -131,16 +131,17 @@ class RouteRoad(Base):
     road_id: Mapped[int] = mapped_column(Integer, ForeignKey("roads.id"), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)  # order in route (0, 1, 2...)
     connection_type: Mapped[str] = mapped_column(String(50), default='direct')  # 'direct' or 'routing'
-    connection_geometry = Column(Geography(geometry_type='LINESTRING', srid=4326))  # connector road from routing API
+    connection_geometry = Column(Geography(geometry_type='LINESTRING', srid=4326, spatial_index=False))  # connector road from routing API, index defined in __table_args__
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
     route: Mapped["UserRoute"] = relationship("UserRoute", back_populates="route_roads")
     road: Mapped["Road"] = relationship("Road", back_populates="route_roads")
 
-    # Composite index for efficient lookups
+    # Indexes for efficient lookups
     __table_args__ = (
         Index('idx_route_roads_route_position', 'route_id', 'position'),
+        Index('idx_route_roads_connection_geometry', 'connection_geometry', postgresql_using='gist'),
     )
 
     def __repr__(self):

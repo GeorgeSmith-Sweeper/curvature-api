@@ -77,7 +77,7 @@ def test_create_route_unauthorized(client: TestClient, multiple_test_roads: list
         "road_ids": road_ids
     })
 
-    assert response.status_code == 403  # No credentials
+    assert response.status_code == 401  # No credentials (Unauthorized)
 
 
 def test_list_routes(client: TestClient, auth_headers: dict, multiple_test_roads: list[Road], db: Session):

@@ -27,7 +27,12 @@ import msgpack
 
 # Add parent directory to path to import curvature modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from curvature.output import OutputTools
+try:
+    from curvature.output import OutputTools
+    CURVATURE_AVAILABLE = True
+except ImportError:
+    CURVATURE_AVAILABLE = False
+    OutputTools = None
 
 # Import configuration (API keys, etc.)
 try:
@@ -65,7 +70,7 @@ app.include_router(routes_router)
 app.include_router(favorites_router)
 
 # Initialize output tools (provides utility methods for working with collections)
-tools = OutputTools('km')
+tools = OutputTools('km') if CURVATURE_AVAILABLE else None
 
 # Global variable to store loaded road data
 # In a production app, you'd use a database, but for now we'll load from msgpack files
@@ -220,6 +225,12 @@ async def load_data(filepath: str):
     Example:
         POST /data/load?filepath=/tmp/vermont.msgpack
     """
+    if not CURVATURE_AVAILABLE:
+        raise HTTPException(
+            status_code=501,
+            detail="Curvature library not available. This legacy endpoint requires the curvature library to be installed."
+        )
+
     global road_collections, data_loaded
 
     try:
@@ -244,7 +255,7 @@ async def get_roads_geojson(
     limit: Optional[int] = Query(100, description="Maximum number of roads to return")
 ):
     """
-    Get roads as GeoJSON FeatureCollection.
+    Get roads as GeoJSON FeatureCollection (legacy msgpack endpoint).
 
     Query parameters let you filter results:
     - min_curvature: Only roads curvier than this (default: 300)
@@ -258,6 +269,12 @@ async def get_roads_geojson(
     Example:
         GET /roads/geojson?min_curvature=1000&surface=paved&limit=50
     """
+    if not CURVATURE_AVAILABLE:
+        raise HTTPException(
+            status_code=501,
+            detail="Curvature library not available. This legacy endpoint requires the curvature library to be installed."
+        )
+
     if not data_loaded:
         raise HTTPException(
             status_code=400,
@@ -325,13 +342,19 @@ async def search_roads(
     limit: Optional[int] = Query(20, description="Maximum number of roads to return")
 ):
     """
-    Search for roads and return as simple JSON (not GeoJSON).
+    Search for roads and return as simple JSON (legacy msgpack endpoint).
 
     Useful for getting a quick list without the full geometry.
 
     Returns:
         List of road objects with name, curvature, length
     """
+    if not CURVATURE_AVAILABLE:
+        raise HTTPException(
+            status_code=501,
+            detail="Curvature library not available. This legacy endpoint requires the curvature library to be installed."
+        )
+
     if not data_loaded:
         raise HTTPException(
             status_code=400,
