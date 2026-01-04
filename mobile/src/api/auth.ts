@@ -29,7 +29,10 @@ export const authApi = {
    */
   logout: async (): Promise<void> => {
     try {
-      await apiClient.post('/auth/logout');
+      const refreshToken = await apiClient.getRefreshToken();
+      if (refreshToken) {
+        await apiClient.post('/auth/logout', { refresh_token: refreshToken });
+      }
     } finally {
       await apiClient.clearTokens();
     }

@@ -4,8 +4,8 @@
  */
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import * as SecureStore from 'expo-secure-store';
 import { AuthTokens, ApiError } from '../types';
+import { storage } from '../utils/storage';
 
 // API Base URL - Update this to your backend URL
 const API_BASE_URL = __DEV__
@@ -107,21 +107,21 @@ class ApiClient {
   // ============================================================================
 
   async getAccessToken(): Promise<string | null> {
-    return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+    return await storage.getItem(ACCESS_TOKEN_KEY);
   }
 
   async getRefreshToken(): Promise<string | null> {
-    return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    return await storage.getItem(REFRESH_TOKEN_KEY);
   }
 
   async saveTokens(accessToken: string, refreshToken: string): Promise<void> {
-    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
-    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    await storage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    await storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   }
 
   async clearTokens(): Promise<void> {
-    await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-    await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    await storage.removeItem(ACCESS_TOKEN_KEY);
+    await storage.removeItem(REFRESH_TOKEN_KEY);
   }
 
   private async refreshAccessToken(): Promise<string> {

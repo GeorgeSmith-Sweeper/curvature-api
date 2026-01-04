@@ -23,6 +23,10 @@ wheels/
 # Configuration with secrets (API keys, passwords, etc.)
 api/config.py
 config.py
+.env
+.env.*
+!.env.example
+*.env
 
 # IDE
 .vscode/
