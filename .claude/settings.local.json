@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/usr/local/opt/postgresql@17/bin/psql:*)",
+      "Bash(PYTHONPATH=/Users/georgesmith-sweeper/Documents/Programming/curvature-api /Users/georgesmith-sweeper/Documents/Programming/curvature/api/venv/bin/python:*)",
+      "Bash(psql:*)",
+      "Bash(/Users/georgesmith-sweeper/Documents/Programming/curvature/api/venv/bin/pip3 install:*)",
+      "Bash(git checkout:*)"
+    ]
+  }
+}
