@@ -46,6 +46,7 @@ except ImportError:
 from api.auth_routes import router as auth_router
 from api.route_routes import router as routes_router
 from api.favorites_routes import router as favorites_router
+from api.roads_routes import router as roads_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -67,6 +68,7 @@ app.add_middleware(
 # Include routers for new features
 app.include_router(auth_router)
 app.include_router(routes_router)
+app.include_router(roads_router)
 app.include_router(favorites_router)
 
 # Initialize output tools (provides utility methods for working with collections)
