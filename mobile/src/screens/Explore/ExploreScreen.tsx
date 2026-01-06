@@ -3,7 +3,7 @@
  * Shows a list of roads sorted by curvature
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,51 +14,98 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { roadsApi, RoadSearchParams } from '../../api/roads';
+import { roadsApi, RoadSearchParams, BBoxParams } from '../../api/roads';
 import { Road } from '../../types';
+import { MapView, BBox } from '../../components/MapView';
+
+type ViewMode = 'list' | 'map';
+
+// Simple debounce utility
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
 
 export function ExploreScreen() {
   const [roads, setRoads] = useState<Road[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [minCurvature, setMinCurvature] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('map'); // Default to map view
+  const loadedBoundsRef = useRef<Set<string>>(new Set()); // Cache loaded areas
 
-  const loadRoads = async (refresh = false) => {
-    try {
-      if (refresh) {
-        setRefreshing(true);
-      } else {
+  // Debounced viewport change handler for map view
+  const handleViewportChange = useCallback(
+    debounce(async (bbox: BBox) => {
+      try {
+        // Create cache key with coarse rounding (2 decimal degrees ~= 200km)
+        // This prevents loading the same area multiple times on small movements
+        const cacheKey = `${(bbox.min_lon / 2).toFixed(0)},${(bbox.min_lat / 2).toFixed(0)},${(bbox.max_lon / 2).toFixed(0)},${(bbox.max_lat / 2).toFixed(0)}`;
+
+        // Skip if already loaded this area
+        if (loadedBoundsRef.current.has(cacheKey)) {
+          console.log('Skipping - area already loaded:', cacheKey);
+          return;
+        }
+
+        console.log('Loading roads for viewport:', cacheKey);
         setLoading(true);
+
+        // Expand bbox to load roads beyond viewport for smoother scrolling
+        const expandedBbox = {
+          min_lon: bbox.min_lon - 1.0,
+          max_lon: bbox.max_lon + 1.0,
+          min_lat: bbox.min_lat - 0.5,
+          max_lat: bbox.max_lat + 0.5,
+        };
+
+        const params: BBoxParams = {
+          ...expandedBbox,
+          limit: 500, // Load up to 500 roads per viewport
+        };
+
+        if (minCurvature && !isNaN(parseFloat(minCurvature))) {
+          params.min_curvature = parseFloat(minCurvature);
+        }
+
+        const newRoads = await roadsApi.getBBox(params);
+        console.log(`Loaded ${newRoads.length} new roads`);
+
+        // Merge with existing roads (avoid duplicates)
+        setRoads((prevRoads) => {
+          const existingIds = new Set(prevRoads.map(r => r.id));
+          const uniqueNewRoads = newRoads.filter(r => !existingIds.has(r.id));
+          console.log(`Adding ${uniqueNewRoads.length} unique roads (${prevRoads.length} existing)`);
+          return [...prevRoads, ...uniqueNewRoads];
+        });
+
+        // Mark this area as loaded
+        loadedBoundsRef.current.add(cacheKey);
+
+      } catch (err) {
+        console.error('Failed to load roads for viewport:', err);
+        setError('Failed to load roads. Please try again.');
+      } finally {
+        setLoading(false);
       }
-      setError(null);
+    }, 1000), // Increased to 1 second debounce to reduce API calls
+    [minCurvature]
+  );
 
-      const params: RoadSearchParams = {
-        limit: 50,
-      };
-
-      if (minCurvature && !isNaN(parseFloat(minCurvature))) {
-        params.min_curvature = parseFloat(minCurvature);
-      }
-
-      const data = await roadsApi.search(params);
-      setRoads(data);
-    } catch (err) {
-      console.error('Failed to load roads:', err);
-      setError('Failed to load roads. Please try again.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
+  // Clear cache when filter changes
   useEffect(() => {
-    loadRoads();
-  }, []);
+    loadedBoundsRef.current.clear();
+    setRoads([]);
+  }, [minCurvature]);
 
-  const handleSearch = () => {
-    loadRoads();
-  };
+  // Note: Search is now handled by viewport changes in map view
+  // List view shows roads loaded by viewport when switching from map
 
   const renderRoadItem = ({ item }: { item: Road }) => (
     <TouchableOpacity style={styles.roadCard}>
@@ -81,39 +128,44 @@ export function ExploreScreen() {
     </TouchableOpacity>
   );
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#7B1FA2" />
-        <Text style={styles.loadingText}>Loading roads...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Explore Curvy Roads</Text>
+
+        <View style={styles.viewToggle}>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === 'list' && styles.toggleButtonActive]}
+            onPress={() => setViewMode('list')}
+          >
+            <Text style={[styles.toggleButtonText, viewMode === 'list' && styles.toggleButtonTextActive]}>
+              List
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === 'map' && styles.toggleButtonActive]}
+            onPress={() => setViewMode('map')}
+          >
+            <Text style={[styles.toggleButtonText, viewMode === 'map' && styles.toggleButtonTextActive]}>
+              Map
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.searchContainer}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Min. curvature"
+            placeholder="Min. curvature (auto-filters map)"
             value={minCurvature}
             onChangeText={setMinCurvature}
             keyboardType="numeric"
             placeholderTextColor="#999"
           />
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-            <Text style={styles.searchButtonText}>Search</Text>
-          </TouchableOpacity>
         </View>
         {minCurvature && (
           <TouchableOpacity
             style={styles.clearButton}
-            onPress={() => {
-              setMinCurvature('');
-              setTimeout(() => loadRoads(), 100);
-            }}
+            onPress={() => setMinCurvature('')}
           >
             <Text style={styles.clearButtonText}>Clear Filter</Text>
           </TouchableOpacity>
@@ -126,22 +178,31 @@ export function ExploreScreen() {
         </View>
       )}
 
-      <FlatList
-        data={roads}
-        renderItem={renderRoadItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
-        refreshing={refreshing}
-        onRefresh={() => loadRoads(true)}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No roads found</Text>
-            <Text style={styles.emptySubtext}>
-              Try adjusting your search filters
-            </Text>
-          </View>
-        }
-      />
+      {viewMode === 'map' ? (
+        <MapView
+          roads={roads}
+          onRoadPress={(road) => {
+            console.log('Road tapped:', road.name);
+          }}
+          onViewportChange={handleViewportChange}
+          style={styles.map}
+        />
+      ) : (
+        <FlatList
+          data={roads}
+          renderItem={renderRoadItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No roads found</Text>
+              <Text style={styles.emptySubtext}>
+                Switch to map view to load roads by scrolling
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -173,7 +234,35 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 12,
+  },
+  viewToggle: {
+    flexDirection: 'row',
     marginBottom: 16,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 4,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  toggleButtonActive: {
+    backgroundColor: '#7B1FA2',
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  toggleButtonTextActive: {
+    color: '#fff',
+  },
+  map: {
+    flex: 1,
   },
   searchContainer: {
     flexDirection: 'row',

@@ -67,6 +67,7 @@ export interface UserRoute {
   updated_at: string;
   is_public: boolean;
   tags: string[] | null;
+  road_count: number;
   roads?: RouteRoad[];
 }
 

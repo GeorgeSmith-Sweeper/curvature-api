@@ -10,8 +10,15 @@ export interface RoadSearchParams {
   max_curvature?: number;
   surface?: 'paved' | 'unpaved' | 'unknown';
   limit?: number;
-  // Future: Add bounding box for map viewport queries
-  // bbox?: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
+}
+
+export interface BBoxParams {
+  min_lon: number;
+  max_lon: number;
+  min_lat: number;
+  max_lat: number;
+  min_curvature?: number;
+  limit?: number;
 }
 
 export const roadsApi = {
@@ -43,5 +50,13 @@ export const roadsApi = {
     return apiClient.get<Road[]>('/roads/nearby', {
       params: { latitude, longitude, radius: radiusMeters },
     });
+  },
+
+  /**
+   * Get roads within a bounding box (viewport-based loading)
+   * Optimized for map viewport queries using PostGIS spatial indexes
+   */
+  getBBox: async (params: BBoxParams): Promise<Road[]> => {
+    return apiClient.get<Road[]>('/roads/bbox', { params });
   },
 };

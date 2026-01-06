@@ -7,6 +7,7 @@ FastAPI routes for browsing and searching roads.
 
 Endpoints:
 - GET /roads/search: Search roads with filters
+- GET /roads/bbox: Get roads within a bounding box (viewport-based loading)
 - GET /roads/{road_id}: Get specific road by ID
 - GET /roads/nearby: Get roads near a location
 """
@@ -15,7 +16,10 @@ from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
+from geoalchemy2.shape import to_shape
+from geoalchemy2.functions import ST_MakeEnvelope, ST_Intersects
+from shapely.geometry import mapping
 
 from api.database import get_db
 from api.models import Road
@@ -34,8 +38,7 @@ class RoadResponse(BaseModel):
     curvature: float
     length_meters: float
     surface: Optional[str]
-    # Note: geometry is excluded from list responses for performance
-    # Include it only in detail responses
+    geometry: Optional[dict] = None  # GeoJSON LineString
 
     class Config:
         from_attributes = True
@@ -81,7 +84,79 @@ async def search_roads(
     # Limit results
     roads = query.limit(limit).all()
 
-    return roads
+    # Convert roads to response format with geometry
+    return [
+        RoadResponse(
+            id=road.id,
+            name=road.name,
+            curvature=road.curvature,
+            length_meters=road.length_meters,
+            surface=road.surface,
+            geometry=mapping(to_shape(road.geometry)) if road.geometry else None
+        )
+        for road in roads
+    ]
+
+
+@router.get("/bbox", response_model=List[RoadResponse])
+async def get_roads_in_bbox(
+    min_lon: float = Query(..., ge=-180, le=180, description="Minimum longitude (west)"),
+    max_lon: float = Query(..., ge=-180, le=180, description="Maximum longitude (east)"),
+    min_lat: float = Query(..., ge=-90, le=90, description="Minimum latitude (south)"),
+    max_lat: float = Query(..., ge=-90, le=90, description="Maximum latitude (north)"),
+    min_curvature: Optional[float] = Query(None, ge=0, description="Minimum curvature"),
+    limit: int = Query(200, ge=1, le=1000, description="Maximum number of results"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_optional)
+):
+    """
+    Get roads within a bounding box (viewport).
+
+    This endpoint is optimized for map viewport-based loading. It uses PostGIS spatial
+    indexes for efficient queries.
+
+    Args:
+        min_lon: West boundary of the bounding box
+        max_lon: East boundary of the bounding box
+        min_lat: South boundary of the bounding box
+        max_lat: North boundary of the bounding box
+        min_curvature: Optional minimum curvature filter
+        limit: Maximum number of results (default 200, max 1000)
+        db: Database session
+
+    Returns:
+        List of roads that intersect the bounding box, ordered by curvature
+    """
+    # Create bounding box geometry using PostGIS
+    bbox = ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+
+    # Query roads that intersect the bounding box
+    query = db.query(Road).filter(
+        ST_Intersects(Road.geometry, bbox)
+    )
+
+    # Apply curvature filter if specified
+    if min_curvature is not None:
+        query = query.filter(Road.curvature >= min_curvature)
+
+    # Order by curvature (most curvy first)
+    query = query.order_by(Road.curvature.desc())
+
+    # Limit results
+    roads = query.limit(limit).all()
+
+    # Convert roads to response format with geometry
+    return [
+        RoadResponse(
+            id=road.id,
+            name=road.name,
+            curvature=road.curvature,
+            length_meters=road.length_meters,
+            surface=road.surface,
+            geometry=mapping(to_shape(road.geometry)) if road.geometry else None
+        )
+        for road in roads
+    ]
 
 
 @router.get("/{road_id}", response_model=dict)
@@ -118,7 +193,7 @@ async def get_road_by_id(
         "curvature": road.curvature,
         "length_meters": road.length_meters,
         "surface": road.surface,
-        "geometry": road.geometry,  # GeoJSON LineString
+        "geometry": mapping(to_shape(road.geometry)) if road.geometry else None,
     }
 
 
